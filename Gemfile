@@ -17,12 +17,14 @@ gem 'faker'
 gem 'therubyracer'
 gem 'bootstrap-sass'
 
+
 group :development, :test do
   gem 'byebug', platforms: [:mri, :mingw, :x64_mingw]
   gem 'pry'
   gem 'capybara', '~> 2.13'
   gem 'selenium-webdriver'
   gem 'rspec-rails'
+  gem 'tux'
 end
 
 group :development do
