@@ -356,6 +356,10 @@ describe 'ActiveRecord Obstacle Course' do
 
     # ------------------ Using ActiveRecord ----------------------
     items_for_user_3_third_order = Order.where(user_id: 3).third.items.pluck(:name)
+
+    items_for_user_3_third_order = Order.eager_load(:items).where(user_id: 3).third.items.pluck(:name)
+
+    items_for_user_3_third_order = User.where(id: 3).first.orders.third.items.pluck(:name)
     # ------------------------------------------------------------
 
     # Expectation
@@ -430,8 +434,8 @@ describe 'ActiveRecord Obstacle Course' do
     expected_result = [order_3, order_5, order_9, order_10, order_11, order_13, order_15]
 
     # ------------------ Inefficient Solution -------------------
-    order_ids = OrderItem.where(item_id: item_4.id).map(&:order_id)
-    orders = order_ids.map { |id| Order.find(id) }
+    # order_ids = OrderItem.where(item_id: item_4.id).map(&:order_id)
+    # orders = order_ids.map { |id| Order.find(id) }
     # -----------------------------------------------------------
 
     # ------------------ Improved Solution ----------------------
@@ -460,6 +464,7 @@ describe 'ActiveRecord Obstacle Course' do
     expect(orders).to eq(expected_result)
   end
 
+
   it '25. returns items that are associated with one or more orders' do
     unordered_item = Item.create(name: 'Unordered Item')
     expected_result = [item_1, item_2, item_3, item_4, item_5, item_7, item_8, item_9, item_10]
@@ -473,9 +478,11 @@ describe 'ActiveRecord Obstacle Course' do
 
     ordered_items = ordered_items.compact
     # ------------------------------------------------------------
-
+    #(items that are included in more than one order)
     # ------------------ ActiveRecord Solution ----------------------
-    # Solution goes here
+
+    ordered_items = Item.joins(:orders).distinct
+
     # ---------------------------------------------------------------
 
     # Expectations
@@ -498,16 +505,18 @@ describe 'ActiveRecord Obstacle Course' do
     expected_result = ['Thing 1', 'Thing 2', 'Thing 3', 'Thing 4', 'Thing 5', 'Thing 7', 'Thing 8', 'Thing 9', 'Thing 10']
 
     # ----------------------- Using Ruby -------------------------
-    items = Item.all
-
-    ordered_items = items.map do |item|
-      item if item.orders.present?
-    end.compact
-
-    ordered_items_names = ordered_items.map(&:name)
+    # items = Item.all
+    #
+    # ordered_items = items.map do |item|
+    #   item if item.orders.present?
+    # end.compact
+    #
+    # ordered_items_names = ordered_items.map(&:name)
     # ------------------------------------------------------------
 
     # ------------------ ActiveRecord Solution ----------------------
+    ordered_items_names = Item.joins(:orders).distinct.pluck(:name)
+
     # Solution goes here
     # When you find a solution, experiment with adjusting your method chaining
     # Which ones are you able to switch around without relying on Ruby's Enumerable methods?
@@ -518,7 +527,7 @@ describe 'ActiveRecord Obstacle Course' do
     expect(ordered_items_names).to_not include(unordered_items)
   end
 
-  xit '27. returns a table of information for all users orders' do
+  it '27. returns a table of information for all users orders' do
     custom_results = [user_3, user_1, user_2]
 
     # using a single ActiveRecord call, fetch a joined object that mimics the
@@ -530,7 +539,11 @@ describe 'ActiveRecord Obstacle Course' do
     # Sal        |         5
 
     # ------------------ ActiveRecord Solution ----------------------
-    # custom_results =
+    # custom_results = User.select("orders.*, sum(user.orders) as total_order_count").joins(:orders).group(:name)
+    custom_results = User.select("users.name, count(orders.id) as total_order_count").joins(:orders).group(:user_id).order(:name)
+
+    # select("books.*, avg(rating) as avg_rating").joins(:reviews).group(:id).order("avg_rating ASC")
+
     # ---------------------------------------------------------------
 
     expect(custom_results[0].name).to eq(user_3.name)
@@ -541,7 +554,7 @@ describe 'ActiveRecord Obstacle Course' do
     expect(custom_results[2].total_order_count).to eq(5)
   end
 
-  xit '28. returns a table of information for all users items' do
+  it '28. returns a table of information for all users items' do
     custom_results = [user_2, user_1, user_3]
 
     # using a single ActiveRecord call, fetch a joined object that mimics the
@@ -551,9 +564,9 @@ describe 'ActiveRecord Obstacle Course' do
     # Sal        |         20
     # Ian        |         20
     # Dione      |         20
-
+ #ORDER ITEMS ETC
     # ------------------ ActiveRecord Solution ----------------------
-    # custom_results =
+    custom_results = User.select("users.name, count(items.id) as total_item_count").joins(:items).group(:user_id).order(name: :desc)
     # ---------------------------------------------------------------
 
     expect(custom_results[0].name).to eq(user_2.name)
@@ -564,7 +577,7 @@ describe 'ActiveRecord Obstacle Course' do
     expect(custom_results[2].total_item_count).to eq(20)
   end
 
-  xit '29. returns a table of information for all users orders and item counts' do
+  it '29. returns a table of information for all users orders and item counts' do
     # using a single ActiveRecord call, fetch a joined object that mimics the
     # following table of information:
     # --------------------------------------------------------------------------
@@ -599,9 +612,14 @@ describe 'ActiveRecord Obstacle Course' do
     # how will you turn this into the proper ActiveRecord commands?
 
     # ------------------ ActiveRecord Solution ----------------------
-    # data = []
+    #NOONONONONONONONONONONONON
+    data = User.select("users.name as user_name, orders.id as order_id, count(order_items.id) as item_count")
+                .joins(orders: :order_items)
+                .group(:order_id)
+                .group(:user_name)
+                .order("user_name desc")
     # ---------------------------------------------------------------
-
+    # binding.pry
 
     expect(data[0].user_name).to eq(user_2.name)
     expect(data[0].order_id).to eq(2)
@@ -614,7 +632,7 @@ describe 'ActiveRecord Obstacle Course' do
     expect(data[12].item_count).to eq(4)
   end
 
-  xit '30. returns the names of items that have been ordered without n+1 queries' do
+  it '30. returns the names of items that have been ordered without n+1 queries' do
     # What is an n+1 query?
     # This video is older, but the concepts explained are still relevant:
     # http://railscasts.com/episodes/372-bullet
@@ -625,7 +643,9 @@ describe 'ActiveRecord Obstacle Course' do
     Bullet.start_request
 
     # ------------------------------------------------------
-    orders = Order.all # Edit only this line
+    # orders = Order.all.preload(:items)
+    orders = Order.all.includes(:items)
+     # Edit only this line
     # ------------------------------------------------------
 
     # Do not edit below this line

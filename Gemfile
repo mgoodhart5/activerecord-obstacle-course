@@ -25,6 +25,7 @@ group :development, :test do
   gem 'selenium-webdriver'
   gem 'rspec-rails'
   gem 'tux'
+  gem 'bullet'
 end
 
 group :development do
